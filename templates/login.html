@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="login-screen">
+      <form class="login-card" method="post">
+        <p class="eyebrow">Acesso protegido</p>
+        <h1>{{ app_name }}</h1>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="message error">{{ messages[0] }}</div>
+          {% endif %}
+        {% endwith %}
+
+        <label>
+          Senha de acesso
+          <input name="senha" type="password" placeholder="Digite a senha" required autofocus />
+        </label>
+
+        <button type="submit" class="primary-action">Entrar</button>
+      </form>
+    </main>
+  </body>
+</html>

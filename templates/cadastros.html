@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="Resumo">
+        <div>
+          <p class="eyebrow">Assistente de rota</p>
+          <h1>Assistente de Rota</h1>
+        </div>
+        <div class="topbar-actions">
+          <div class="summary">
+            <span>{{ registros|length }}</span>
+            <small>na tela</small>
+          </div>
+          <form method="post" action="{{ url_for('sair') }}">
+            <button type="submit" class="ghost-action">Sair</button>
+          </form>
+        </div>
+      </section>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          <div class="message">{{ messages[0] }}</div>
+        {% endif %}
+      {% endwith %}
+
+      <section class="workspace">
+        <form class="route-form" method="post" action="{{ url_for('adicionar') }}" enctype="multipart/form-data">
+          <h2>Novo cadastro</h2>
+
+          <label>
+            Matricula
+            <input name="matricula" type="text" placeholder="Ex: 2026-001" required />
+          </label>
+
+          <label>
+            Dica
+            <textarea name="dica" rows="4" placeholder="Ex: Portao azul, casa no fundo, ao lado da padaria" required></textarea>
+          </label>
+
+          <label>
+            Geolocalizacao
+            <input id="localizacao" name="localizacao" type="text" placeholder="Rua, bairro, cidade ou use sua localizacao atual" required />
+          </label>
+          <button type="button" id="geoButton" class="ghost-action location-action">Usar minha localizacao</button>
+          <p class="location-status" id="locationStatus"></p>
+
+          <label>
+            Foto da fachada pelo HD
+            <input name="foto" type="file" accept="image/*" />
+          </label>
+
+          <button type="submit" class="primary-action">Adicionar cadastro</button>
+        </form>
+
+        <section class="records-panel" aria-label="Cadastros salvos">
+          <div class="panel-header">
+            <div>
+              <h2>Rotas cadastradas</h2>
+              <p>Busque por matricula, dica ou localizacao.</p>
+            </div>
+          </div>
+
+          <form class="search-box" method="get" action="{{ url_for('cadastros') }}">
+            <label>
+              Buscar
+              <input name="busca" type="search" value="{{ busca }}" placeholder="Digite para filtrar" />
+            </label>
+            <button type="submit" class="ghost-action">Buscar</button>
+          </form>
+
+          <div class="records-list">
+            {% for registro in registros %}
+              <article class="record-card">
+                {% if registro["foto"] %}
+                  <img class="record-photo" src="{{ url_for('uploads', nome_arquivo=registro['foto']) }}" alt="Foto do cadastro {{ registro['matricula'] }}" />
+                {% else %}
+                  <div class="record-photo placeholder">ROTA</div>
+                {% endif %}
+
+                <div class="record-content">
+                  <div class="record-title-row">
+                    <h3>Matricula {{ registro["matricula"] }}</h3>
+                  </div>
+                  <p class="record-location">{{ registro["localizacao"] }}</p>
+                  <p class="record-tip">{{ registro["dica"] }}</p>
+
+                  <div class="record-actions">
+                    <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['localizacao']|urlencode }}">Abrir no mapa</a>
+
+                    <form method="post" action="{{ url_for('apagar', cadastro_id=registro['id']) }}" class="delete-form">
+                      <input name="senha_admin" type="password" placeholder="Senha do dono" required />
+                      <button type="submit" class="delete-action">Apagar</button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            {% else %}
+              <p class="empty-state is-visible">Nenhum cadastro encontrado.</p>
+            {% endfor %}
+          </div>
+        </section>
+      </section>
+    </main>
+    <script>
+      const geoButton = document.querySelector("#geoButton");
+      const localizacaoInput = document.querySelector("#localizacao");
+      const locationStatus = document.querySelector("#locationStatus");
+      let geoWatchId = null;
+
+      function setLocationStatus(message, isError = false) {
+        locationStatus.textContent = message;
+        locationStatus.classList.toggle("is-error", isError);
+      }
+
+      function formatCoordinates(position) {
+        const { latitude, longitude } = position.coords;
+        return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+      }
+
+      function finishLocationSearch(bestPosition) {
+        if (geoWatchId !== null) {
+          navigator.geolocation.clearWatch(geoWatchId);
+          geoWatchId = null;
+        }
+
+        geoButton.disabled = false;
+        geoButton.textContent = "Usar minha localizacao";
+
+        if (!bestPosition) {
+          setLocationStatus("Nao foi possivel pegar a localizacao. Digite o endereco manualmente.", true);
+          return;
+        }
+
+        const accuracy = Math.round(bestPosition.coords.accuracy);
+        localizacaoInput.value = formatCoordinates(bestPosition);
+        setLocationStatus(`Localizacao adicionada. Margem aproximada: ${accuracy} metros.`);
+        localizacaoInput.focus();
+      }
+
+      geoButton.addEventListener("click", () => {
+        if (!navigator.geolocation) {
+          setLocationStatus("Este navegador nao tem geolocalizacao.", true);
+          return;
+        }
+
+        if (geoWatchId !== null) {
+          navigator.geolocation.clearWatch(geoWatchId);
+          geoWatchId = null;
+        }
+
+        let bestPosition = null;
+
+        geoButton.disabled = true;
+        geoButton.textContent = "Melhorando precisao...";
+        setLocationStatus("Autorize a localizacao e aguarde alguns segundos.");
+
+        geoWatchId = navigator.geolocation.watchPosition(
+          (position) => {
+            if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+              bestPosition = position;
+              setLocationStatus(`Melhor leitura ate agora: ${Math.round(position.coords.accuracy)} metros.`);
+            }
+
+            if (position.coords.accuracy <= 25) {
+              finishLocationSearch(bestPosition);
+            }
+          },
+          () => {
+            finishLocationSearch(bestPosition);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 15000,
+          }
+        );
+
+        setTimeout(() => finishLocationSearch(bestPosition), 12000);
+      });
+    </script>
+  </body>
+</html>
