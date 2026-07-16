@@ -11,6 +11,7 @@ APP_NAME = "Assistente de Rota"
 ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "rota2026")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1234")
 SECRET_KEY = os.environ.get("SECRET_KEY", "troque-esta-chave-no-render")
+MAX_FOTOS = 3
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
@@ -26,8 +27,8 @@ app.secret_key = SECRET_KEY
 
 
 def preparar_pastas():
-    DATA_DIR.mkdir(exist_ok=True)
-    UPLOAD_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def conectar_banco():
@@ -45,13 +46,30 @@ def criar_banco():
             CREATE TABLE IF NOT EXISTS cadastros (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 matricula TEXT NOT NULL,
+                endereco TEXT,
                 dica TEXT NOT NULL,
                 localizacao TEXT NOT NULL,
                 foto TEXT,
+                foto2 TEXT,
+                foto3 TEXT,
                 criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        migrar_banco(conexao)
+
+
+def migrar_banco(conexao):
+    colunas = [linha["name"] for linha in conexao.execute("PRAGMA table_info(cadastros)").fetchall()]
+    novas_colunas = {
+        "endereco": "TEXT",
+        "foto2": "TEXT",
+        "foto3": "TEXT",
+    }
+
+    for nome, tipo in novas_colunas.items():
+        if nome not in colunas:
+            conexao.execute(f"ALTER TABLE cadastros ADD COLUMN {nome} {tipo}")
 
 
 def usuario_logado():
@@ -80,6 +98,31 @@ def salvar_foto(arquivo):
     caminho_final = UPLOAD_DIR / nome_final
     arquivo.save(caminho_final)
     return nome_final
+
+
+def salvar_fotos(arquivos):
+    fotos_salvas = []
+
+    for arquivo in arquivos[:MAX_FOTOS]:
+        nome_foto = salvar_foto(arquivo)
+
+        if nome_foto:
+            fotos_salvas.append(nome_foto)
+
+    while len(fotos_salvas) < MAX_FOTOS:
+        fotos_salvas.append("")
+
+    return fotos_salvas
+
+
+def apagar_fotos(cadastro):
+    for campo in ("foto", "foto2", "foto3"):
+        nome_foto = cadastro[campo] if campo in cadastro.keys() else ""
+
+        if nome_foto:
+            caminho_foto = UPLOAD_DIR / nome_foto
+            if caminho_foto.exists():
+                caminho_foto.unlink()
 
 
 @app.before_request
@@ -117,10 +160,10 @@ def cadastros():
             registros = conexao.execute(
                 """
                 SELECT * FROM cadastros
-                WHERE matricula LIKE ? OR dica LIKE ? OR localizacao LIKE ?
+                WHERE matricula LIKE ? OR endereco LIKE ? OR dica LIKE ? OR localizacao LIKE ?
                 ORDER BY id DESC
                 """,
-                (termo, termo, termo),
+                (termo, termo, termo, termo),
             ).fetchall()
         else:
             registros = conexao.execute("SELECT * FROM cadastros ORDER BY id DESC").fetchall()
@@ -134,26 +177,71 @@ def adicionar():
         return redirect(url_for("login"))
 
     matricula = request.form.get("matricula", "").strip()
+    endereco = request.form.get("endereco", "").strip()
     dica = request.form.get("dica", "").strip()
     localizacao = request.form.get("localizacao", "").strip()
-    foto = request.files.get("foto")
+    fotos = request.files.getlist("fotos")
 
-    if not matricula or not dica or not localizacao:
-        flash("Preencha matricula, dica e localizacao.")
+    if not matricula or not endereco or not dica:
+        flash("Preencha matricula, endereco e dica.")
         return redirect(url_for("cadastros"))
 
-    nome_foto = salvar_foto(foto)
+    foto1, foto2, foto3 = salvar_fotos(fotos)
 
     with conectar_banco() as conexao:
         conexao.execute(
             """
-            INSERT INTO cadastros (matricula, dica, localizacao, foto)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO cadastros (matricula, endereco, dica, localizacao, foto, foto2, foto3)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (matricula, dica, localizacao, nome_foto),
+            (matricula, endereco, dica, localizacao, foto1, foto2, foto3),
         )
 
     flash("Cadastro adicionado com sucesso.")
+    return redirect(url_for("cadastros"))
+
+
+@app.route("/editar/<int:cadastro_id>", methods=["POST"])
+def editar(cadastro_id):
+    if not usuario_logado():
+        return redirect(url_for("login"))
+
+    matricula = request.form.get("matricula", "").strip()
+    endereco = request.form.get("endereco", "").strip()
+    dica = request.form.get("dica", "").strip()
+    localizacao = request.form.get("localizacao", "").strip()
+    fotos = request.files.getlist("fotos")
+    tem_foto_nova = any(arquivo and arquivo.filename for arquivo in fotos)
+
+    if not matricula or not endereco or not dica:
+        flash("Preencha matricula, endereco e dica.")
+        return redirect(url_for("cadastros"))
+
+    with conectar_banco() as conexao:
+        cadastro = conexao.execute("SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
+
+        if not cadastro:
+            flash("Cadastro nao encontrado.")
+            return redirect(url_for("cadastros"))
+
+        if tem_foto_nova:
+            apagar_fotos(cadastro)
+            foto1, foto2, foto3 = salvar_fotos(fotos)
+        else:
+            foto1 = cadastro["foto"] or ""
+            foto2 = cadastro["foto2"] or ""
+            foto3 = cadastro["foto3"] or ""
+
+        conexao.execute(
+            """
+            UPDATE cadastros
+            SET matricula = ?, endereco = ?, dica = ?, localizacao = ?, foto = ?, foto2 = ?, foto3 = ?
+            WHERE id = ?
+            """,
+            (matricula, endereco, dica, localizacao, foto1, foto2, foto3, cadastro_id),
+        )
+
+    flash("Cadastro atualizado.")
     return redirect(url_for("cadastros"))
 
 
@@ -169,13 +257,11 @@ def apagar(cadastro_id):
         return redirect(url_for("cadastros"))
 
     with conectar_banco() as conexao:
-        cadastro = conexao.execute("SELECT foto FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
+        cadastro = conexao.execute("SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
         conexao.execute("DELETE FROM cadastros WHERE id = ?", (cadastro_id,))
 
-    if cadastro and cadastro["foto"]:
-        caminho_foto = UPLOAD_DIR / cadastro["foto"]
-        if caminho_foto.exists():
-            caminho_foto.unlink()
+    if cadastro:
+        apagar_fotos(cadastro)
 
     flash("Cadastro apagado.")
     return redirect(url_for("cadastros"))
