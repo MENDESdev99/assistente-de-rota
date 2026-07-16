@@ -298,18 +298,29 @@ textarea:focus {
   margin-bottom: 8px;
 }
 
+.record-location-box {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
 .record-location,
 .record-tip {
   margin-bottom: 8px;
 }
 
 .record-location {
+  margin-bottom: 0;
   color: var(--accent-strong);
   font-weight: 800;
 }
 
 .record-coordinates {
-  margin-bottom: 8px;
+  margin-bottom: 0;
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 700;

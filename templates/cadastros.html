@@ -106,14 +106,21 @@
                   <div class="record-title-row">
                     <h3>Matricula {{ registro["matricula"] }}</h3>
                   </div>
-                  <p class="record-location">{{ registro["endereco"] or registro["localizacao"] }}</p>
-                  {% if registro["localizacao"] %}
-                    <p class="record-coordinates">{{ registro["localizacao"] }}</p>
-                  {% endif %}
+                  <div class="record-location-box">
+                    <p class="record-location"><strong>Rua e numero:</strong> {{ registro["endereco"] or "Nao informado" }}</p>
+                    {% if registro["localizacao"] %}
+                      <p class="record-coordinates"><strong>GPS:</strong> {{ registro["localizacao"] }}</p>
+                    {% else %}
+                      <p class="record-coordinates"><strong>GPS:</strong> Nao informado</p>
+                    {% endif %}
+                  </div>
                   <p class="record-tip">{{ registro["dica"] }}</p>
 
                   <div class="record-actions">
-                    <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ (registro['localizacao'] or registro['endereco'])|urlencode }}">Abrir no mapa</a>
+                    <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['endereco']|urlencode }}">Mapa pela rua</a>
+                    {% if registro["localizacao"] %}
+                      <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['localizacao']|urlencode }}">Mapa pelo GPS</a>
+                    {% endif %}
 
                     <details class="edit-panel">
                       <summary class="ghost-action">Editar</summary>
