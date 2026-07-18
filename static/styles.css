@@ -198,7 +198,9 @@ h2 {
 }
 
 .summary small {
+  display: block;
   color: var(--muted);
+  font-weight: 800;
 }
 
 .workspace {

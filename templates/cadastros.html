@@ -15,8 +15,8 @@
         </div>
         <div class="topbar-actions">
           <div class="summary">
-            <span>{{ registros|length }}</span>
-            <small>na tela</small>
+            <small>📄 Cadastros</small>
+            <span>{{ total_cadastros }}</span>
           </div>
           <form method="post" action="{{ url_for('sair') }}">
             <button type="submit" class="ghost-action">Sair</button>
@@ -69,7 +69,7 @@
             <input class="js-photo-input" name="fotos" type="file" accept="image/*" capture="environment" />
           </label>
 
-          <button type="submit" class="primary-action">Adicionar cadastro</button>
+          <button type="submit" class="primary-action">➕ Adicionar cadastro</button>
         </form>
 
         <section class="records-panel" aria-label="Cadastros salvos">
@@ -85,7 +85,7 @@
               Buscar
               <input name="busca" type="search" value="{{ busca }}" placeholder="Matricula, rua, numero, dica ou localizacao" />
             </label>
-            <button type="submit" class="ghost-action">Buscar</button>
+            <button type="submit" class="ghost-action">🔍 Buscar</button>
           </form>
           <div class="list-controls">
             {% if mostrar_todos %}
@@ -127,13 +127,13 @@
                   <p class="record-tip">{{ registro["dica"] }}</p>
 
                   <div class="record-actions">
-                    <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['endereco']|urlencode }}">Mapa pela rua</a>
+                    <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['endereco']|urlencode }}">🗺 Abrir no Maps pela rua</a>
                     {% if registro["localizacao"] %}
-                      <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['localizacao']|urlencode }}">Mapa pelo GPS</a>
+                      <a class="map-link" target="_blank" rel="noreferrer" href="https://www.google.com/maps/search/?api=1&query={{ registro['localizacao']|urlencode }}">🗺 Abrir no Maps pelo GPS</a>
                     {% endif %}
 
                     <details class="edit-panel">
-                      <summary class="ghost-action">Editar</summary>
+                      <summary class="ghost-action">✏ Editar</summary>
                       <form method="post" action="{{ url_for('editar', cadastro_id=registro['id']) }}" enctype="multipart/form-data" class="edit-form">
                         <label>
                           Matricula
@@ -165,13 +165,13 @@
                           Substituir foto de referencia
                           <input class="js-photo-input" name="fotos" type="file" accept="image/*" capture="environment" />
                         </label>
-                        <button type="submit" class="primary-action">Salvar edicao</button>
+                        <button type="submit" class="primary-action">✏ Salvar edicao</button>
                       </form>
                     </details>
 
                     <form method="post" action="{{ url_for('apagar', cadastro_id=registro['id']) }}" class="delete-form js-delete-form">
                       <input name="senha_admin" type="password" placeholder="Senha do dono" required />
-                      <button type="submit" class="delete-action">Apagar</button>
+                      <button type="submit" class="delete-action">🗑 Excluir</button>
                     </form>
                   </div>
                 </div>

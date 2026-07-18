@@ -233,9 +233,12 @@ def cadastros():
     busca = request.args.get("busca", "").strip()
     mostrar_todos = request.args.get("todos") == "1"
     registros = []
+    total_cadastros = 0
 
-    if busca or mostrar_todos:
-        with conectar_banco() as conexao:
+    with conectar_banco() as conexao:
+        total_cadastros = executar(conexao, "SELECT COUNT(*) AS total FROM cadastros").fetchone()["total"]
+
+        if busca or mostrar_todos:
             if mostrar_todos and not busca:
                 registros = executar(conexao, "SELECT * FROM cadastros ORDER BY id DESC").fetchall()
             else:
@@ -267,6 +270,7 @@ def cadastros():
         registros=registros,
         busca=busca,
         mostrar_todos=mostrar_todos,
+        total_cadastros=total_cadastros,
     )
 
 
