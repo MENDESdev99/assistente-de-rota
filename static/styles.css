@@ -22,7 +22,8 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(180deg, #f6faf8 0%, var(--bg) 44%, #e9eff1 100%);
+  background:
+    linear-gradient(180deg, rgba(145, 189, 239, 0.78) 0%, rgba(197, 184, 226, 0.68) 48%, rgba(241, 172, 203, 0.62) 100%);
   color: var(--text);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -54,7 +55,7 @@ p {
 .records-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
 
@@ -150,7 +151,8 @@ p {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
   box-shadow: var(--shadow-soft);
 }
 
@@ -334,7 +336,7 @@ textarea:focus {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel-strong);
+  background: rgba(248, 251, 250, 0.92);
   box-shadow: 0 1px 0 rgba(20, 38, 31, 0.04);
   transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
