@@ -95,8 +95,10 @@
                   {% set fotos = [registro["foto"], registro["foto2"], registro["foto3"]] %}
                   {% for foto in fotos if foto %}
                     {% set foto_src = foto if foto.startswith("http") else url_for('uploads', nome_arquivo=foto) %}
-                    <button type="button" class="photo-button js-zoom-photo" data-src="{{ foto_src }}">
-                      <img class="record-photo" src="{{ foto_src }}" alt="Foto do cadastro {{ registro['matricula'] }}" />
+                    {% set foto_thumb = foto_src.replace("/upload/", "/upload/f_auto,q_auto,w_360,h_260,c_fill/") if foto_src.startswith("http") else foto_src %}
+                    {% set foto_zoom = foto_src.replace("/upload/", "/upload/f_auto,q_auto,w_1200/") if foto_src.startswith("http") else foto_src %}
+                    <button type="button" class="photo-button js-zoom-photo" data-src="{{ foto_zoom }}">
+                      <img class="record-photo" src="{{ foto_thumb }}" loading="lazy" decoding="async" alt="Foto do cadastro {{ registro['matricula'] }}" />
                     </button>
                   {% else %}
                     <div class="record-photo placeholder">ROTA</div>
@@ -182,6 +184,8 @@
 
     <script>
       let geoWatchId = null;
+      const MAX_IMAGE_WIDTH = 1400;
+      const IMAGE_QUALITY = 0.74;
 
       function setLocationStatus(statusElement, message, isError = false) {
         statusElement.textContent = message;
@@ -261,12 +265,98 @@
         });
       });
 
+      function canvasToBlob(canvas, quality) {
+        return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      }
+
+      async function compactImageFile(file) {
+        if (!file || !file.type.startsWith("image/")) {
+          return file;
+        }
+
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        try {
+          await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = reject;
+            image.src = objectUrl;
+          });
+
+          const scale = Math.min(1, MAX_IMAGE_WIDTH / image.naturalWidth);
+
+          if (scale === 1 && file.size < 900000) {
+            return file;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(image.naturalWidth * scale);
+          canvas.height = Math.round(image.naturalHeight * scale);
+
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+          const blob = await canvasToBlob(canvas, IMAGE_QUALITY);
+
+          if (!blob) {
+            return file;
+          }
+
+          return new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" });
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      }
+
+      async function compactFormPhotos(form) {
+        const inputs = form.querySelectorAll(".js-photo-input");
+        const dataTransferByInput = new Map();
+
+        for (const input of inputs) {
+          const [file] = input.files;
+
+          if (!file) {
+            continue;
+          }
+
+          const compactFile = await compactImageFile(file);
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(compactFile);
+          dataTransferByInput.set(input, dataTransfer);
+        }
+
+        dataTransferByInput.forEach((dataTransfer, input) => {
+          input.files = dataTransfer.files;
+        });
+      }
+
       document.querySelectorAll(".js-photo-input").forEach((input) => {
         input.addEventListener("change", () => {
           if (input.files.length > 3) {
             alert("Escolha no maximo 3 fotos.");
             input.value = "";
           }
+        });
+      });
+
+      document.querySelectorAll("form[enctype='multipart/form-data']").forEach((form) => {
+        form.addEventListener("submit", async (event) => {
+          if (form.dataset.ready === "true") {
+            return;
+          }
+
+          event.preventDefault();
+          const submitButton = form.querySelector("button[type='submit']");
+
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Salvando...";
+          }
+
+          await compactFormPhotos(form);
+          form.dataset.ready = "true";
+          form.requestSubmit();
         });
       });
 
