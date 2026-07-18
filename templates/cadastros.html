@@ -87,6 +87,13 @@
             </label>
             <button type="submit" class="ghost-action">Buscar</button>
           </form>
+          <div class="list-controls">
+            {% if mostrar_todos %}
+              <a class="ghost-action list-toggle" href="{{ url_for('cadastros') }}">Fechar lista</a>
+            {% else %}
+              <a class="ghost-action list-toggle" href="{{ url_for('cadastros', todos='1') }}">Exibir todas</a>
+            {% endif %}
+          </div>
 
           <div class="records-list">
             {% for registro in registros %}
@@ -172,6 +179,8 @@
             {% else %}
               {% if busca %}
                 <p class="empty-state is-visible">Nenhum cadastro encontrado para essa busca.</p>
+              {% elif mostrar_todos %}
+                <p class="empty-state is-visible">Nenhum cadastro cadastrado ainda.</p>
               {% else %}
                 <p class="empty-state is-visible">Pesquise por matricula, rua, numero, dica ou GPS para ver os cadastros.</p>
               {% endif %}

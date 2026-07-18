@@ -231,33 +231,43 @@ def cadastros():
         return redirect(url_for("login"))
 
     busca = request.args.get("busca", "").strip()
+    mostrar_todos = request.args.get("todos") == "1"
     registros = []
 
-    if busca:
+    if busca or mostrar_todos:
         with conectar_banco() as conexao:
-            termo = f"%{busca}%"
-            if USANDO_POSTGRES:
-                registros = executar(
-                    conexao,
-                    """
-                    SELECT * FROM cadastros
-                    WHERE matricula ILIKE ? OR endereco ILIKE ? OR dica ILIKE ? OR localizacao ILIKE ?
-                    ORDER BY id DESC
-                    """,
-                    (termo, termo, termo, termo),
-                ).fetchall()
+            if mostrar_todos and not busca:
+                registros = executar(conexao, "SELECT * FROM cadastros ORDER BY id DESC").fetchall()
             else:
-                registros = executar(
-                    conexao,
-                    """
-                    SELECT * FROM cadastros
-                    WHERE matricula LIKE ? OR endereco LIKE ? OR dica LIKE ? OR localizacao LIKE ?
-                    ORDER BY id DESC
-                    """,
-                    (termo, termo, termo, termo),
-                ).fetchall()
+                termo = f"%{busca}%"
+                if USANDO_POSTGRES:
+                    registros = executar(
+                        conexao,
+                        """
+                        SELECT * FROM cadastros
+                        WHERE matricula ILIKE ? OR endereco ILIKE ? OR dica ILIKE ? OR localizacao ILIKE ?
+                        ORDER BY id DESC
+                        """,
+                        (termo, termo, termo, termo),
+                    ).fetchall()
+                else:
+                    registros = executar(
+                        conexao,
+                        """
+                        SELECT * FROM cadastros
+                        WHERE matricula LIKE ? OR endereco LIKE ? OR dica LIKE ? OR localizacao LIKE ?
+                        ORDER BY id DESC
+                        """,
+                        (termo, termo, termo, termo),
+                    ).fetchall()
 
-    return render_template("cadastros.html", app_name=APP_NAME, registros=registros, busca=busca)
+    return render_template(
+        "cadastros.html",
+        app_name=APP_NAME,
+        registros=registros,
+        busca=busca,
+        mostrar_todos=mostrar_todos,
+    )
 
 
 @app.route("/adicionar", methods=["POST"])

@@ -320,7 +320,19 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+  margin-bottom: 10px;
+}
+
+.list-controls {
+  display: flex;
+  justify-content: flex-end;
   margin-bottom: 16px;
+}
+
+.list-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
 }
 
 .records-list {
@@ -584,6 +596,15 @@ textarea:focus {
   .search-box,
   .record-card {
     grid-template-columns: 1fr;
+  }
+
+  .list-controls {
+    justify-content: stretch;
+  }
+
+  .list-toggle {
+    justify-content: center;
+    width: 100%;
   }
 
   .record-photo {
