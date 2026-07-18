@@ -5,10 +5,10 @@
   --text: #17211d;
   --muted: #65716d;
   --line: #d8e2de;
-  --accent: #14795b;
-  --accent-strong: #0d5d45;
-  --accent-soft: #e5f4ee;
-  --focus: rgba(20, 121, 91, 0.16);
+  --accent: #0b3a67;
+  --accent-strong: #062d56;
+  --accent-soft: #e8eefb;
+  --focus: rgba(11, 58, 103, 0.18);
   --warning: #a93636;
   --soft: #edf5f1;
   --shadow: 0 18px 44px rgba(20, 38, 31, 0.1);
@@ -479,6 +479,10 @@ textarea:focus {
   border: 1px solid #efcccc;
 }
 
+.primary-action:hover {
+  background: #041f3d;
+}
+
 .map-link {
   display: inline-flex;
   align-items: center;
@@ -507,9 +511,9 @@ textarea:focus {
 .message {
   margin-bottom: 16px;
   padding: 12px 14px;
-  border: 1px solid #cfe1d6;
+  border: 1px solid #ccd8ee;
   border-radius: 8px;
-  background: #eef8f2;
+  background: #edf2fb;
   color: var(--accent-strong);
   font-weight: 700;
 }
