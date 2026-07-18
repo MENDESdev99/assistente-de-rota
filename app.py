@@ -203,9 +203,7 @@ def apagar_fotos(cadastro):
                 caminho_foto.unlink()
 
 
-@app.before_request
-def garantir_banco():
-    criar_banco()
+criar_banco()
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -387,5 +385,4 @@ def sair():
 
 
 if __name__ == "__main__":
-    criar_banco()
     app.run(host="0.0.0.0", port=5000, debug=True)
