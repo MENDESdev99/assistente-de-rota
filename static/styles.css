@@ -45,6 +45,8 @@ p {
   min-height: 100vh;
   place-items: center;
   padding: 20px;
+  background:
+    linear-gradient(180deg, rgba(145, 189, 239, 0.96) 0%, rgba(197, 184, 226, 0.94) 52%, rgba(241, 172, 203, 0.92) 100%);
 }
 
 .login-card,
@@ -58,17 +60,79 @@ p {
 
 .login-card {
   display: grid;
-  gap: 16px;
-  width: min(420px, 100%);
-  padding: 28px;
-  border-top: 4px solid var(--accent);
+  gap: 18px;
+  width: min(440px, 100%);
+  padding: 30px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #092445;
+}
+
+.login-divider {
+  height: 2px;
+  margin-bottom: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.login-divider.bottom {
+  margin: 18px 0 0;
 }
 
 .creator-credit {
-  margin: -8px 0 2px;
-  color: var(--muted);
-  font-size: 0.92rem;
+  margin: -10px 0 8px;
+  color: rgba(9, 36, 69, 0.68);
+  font-size: 0.95rem;
   font-weight: 700;
+  text-align: center;
+}
+
+.login-card .eyebrow {
+  margin-bottom: -4px;
+  color: rgba(9, 36, 69, 0.72);
+  text-align: center;
+  letter-spacing: 0.12em;
+}
+
+.login-card h1 {
+  color: #092445;
+  font-size: clamp(2.1rem, 8vw, 3.3rem);
+  font-weight: 400;
+  text-align: center;
+}
+
+.login-card label {
+  color: rgba(9, 36, 69, 0.72);
+}
+
+.login-card input {
+  border-width: 0 0 2px;
+  border-radius: 0;
+  padding: 12px 4px;
+  background: transparent;
+  color: #092445;
+}
+
+.login-card input::placeholder {
+  color: rgba(9, 36, 69, 0.46);
+}
+
+.login-card input:focus {
+  border-color: #092445;
+  box-shadow: none;
+}
+
+.login-card .primary-action {
+  margin-top: 12px;
+  border-radius: 0;
+  background: #062d56;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-card .primary-action:hover {
+  background: #041f3d;
 }
 
 .app-shell {
