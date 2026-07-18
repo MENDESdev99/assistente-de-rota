@@ -6,6 +6,19 @@ from uuid import uuid4
 from flask import Flask, flash, redirect, render_template, request, send_from_directory, session, url_for
 from werkzeug.utils import secure_filename
 
+try:
+    import cloudinary
+    import cloudinary.uploader
+except ImportError:
+    cloudinary = None
+
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
 
 APP_NAME = "Assistente de Rota"
 ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "rota2026")
@@ -17,6 +30,12 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"
 DATABASE = DATA_DIR / "assistente_rota.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USANDO_POSTGRES = bool(DATABASE_URL)
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip()
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "").strip()
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
+USANDO_CLOUDINARY = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 TEMPLATE_FOLDER = "templates" if (BASE_DIR / "templates").exists() else "."
@@ -25,6 +44,14 @@ STATIC_FOLDER = "static" if (BASE_DIR / "static").exists() else "."
 app = Flask(__name__, template_folder=TEMPLATE_FOLDER, static_folder=STATIC_FOLDER)
 app.secret_key = SECRET_KEY
 
+if USANDO_CLOUDINARY and cloudinary is not None:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+
 
 def preparar_pastas():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -32,40 +59,77 @@ def preparar_pastas():
 
 
 def conectar_banco():
+    if USANDO_POSTGRES:
+        if psycopg is None:
+            raise RuntimeError("Instale psycopg para usar DATABASE_URL com Postgres.")
+
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+
     conexao = sqlite3.connect(DATABASE)
     conexao.row_factory = sqlite3.Row
     return conexao
+
+
+def executar(conexao, sql, parametros=()):
+    if USANDO_POSTGRES:
+        sql = sql.replace("?", "%s")
+
+    return conexao.execute(sql, parametros)
 
 
 def criar_banco():
     preparar_pastas()
 
     with conectar_banco() as conexao:
-        conexao.execute(
-            """
-            CREATE TABLE IF NOT EXISTS cadastros (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                matricula TEXT NOT NULL,
-                endereco TEXT,
-                dica TEXT NOT NULL,
-                localizacao TEXT NOT NULL,
-                foto TEXT,
-                foto2 TEXT,
-                foto3 TEXT,
-                criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+        if USANDO_POSTGRES:
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cadastros (
+                    id SERIAL PRIMARY KEY,
+                    matricula TEXT NOT NULL,
+                    endereco TEXT,
+                    dica TEXT NOT NULL,
+                    localizacao TEXT NOT NULL DEFAULT '',
+                    foto TEXT,
+                    foto2 TEXT,
+                    foto3 TEXT,
+                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
             )
-            """
-        )
+        else:
+            conexao.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cadastros (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    matricula TEXT NOT NULL,
+                    endereco TEXT,
+                    dica TEXT NOT NULL,
+                    localizacao TEXT NOT NULL,
+                    foto TEXT,
+                    foto2 TEXT,
+                    foto3 TEXT,
+                    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
         migrar_banco(conexao)
 
 
 def migrar_banco(conexao):
-    colunas = [linha["name"] for linha in conexao.execute("PRAGMA table_info(cadastros)").fetchall()]
     novas_colunas = {
         "endereco": "TEXT",
         "foto2": "TEXT",
         "foto3": "TEXT",
     }
+
+    if USANDO_POSTGRES:
+        for nome, tipo in novas_colunas.items():
+            conexao.execute(f"ALTER TABLE cadastros ADD COLUMN IF NOT EXISTS {nome} {tipo}")
+        return
+
+    colunas = [linha["name"] for linha in conexao.execute("PRAGMA table_info(cadastros)").fetchall()]
 
     for nome, tipo in novas_colunas.items():
         if nome not in colunas:
@@ -92,6 +156,17 @@ def salvar_foto(arquivo):
         flash("A foto precisa ser PNG, JPG, JPEG, GIF ou WEBP.")
         return ""
 
+    if USANDO_CLOUDINARY:
+        if cloudinary is None:
+            raise RuntimeError("Instale cloudinary para salvar fotos fora do Render.")
+
+        resultado = cloudinary.uploader.upload(
+            arquivo,
+            folder="assistente-de-rota",
+            resource_type="image",
+        )
+        return resultado.get("secure_url", "")
+
     nome_original = secure_filename(arquivo.filename)
     extensao = nome_original.rsplit(".", 1)[1].lower()
     nome_final = f"{uuid4().hex}.{extensao}"
@@ -116,6 +191,9 @@ def salvar_fotos(arquivos):
 
 
 def apagar_fotos(cadastro):
+    if USANDO_CLOUDINARY:
+        return
+
     for campo in ("foto", "foto2", "foto3"):
         nome_foto = cadastro[campo] if campo in cadastro.keys() else ""
 
@@ -157,16 +235,28 @@ def cadastros():
     with conectar_banco() as conexao:
         if busca:
             termo = f"%{busca}%"
-            registros = conexao.execute(
-                """
-                SELECT * FROM cadastros
-                WHERE matricula LIKE ? OR endereco LIKE ? OR dica LIKE ? OR localizacao LIKE ?
-                ORDER BY id DESC
-                """,
-                (termo, termo, termo, termo),
-            ).fetchall()
+            if USANDO_POSTGRES:
+                registros = executar(
+                    conexao,
+                    """
+                    SELECT * FROM cadastros
+                    WHERE matricula ILIKE ? OR endereco ILIKE ? OR dica ILIKE ? OR localizacao ILIKE ?
+                    ORDER BY id DESC
+                    """,
+                    (termo, termo, termo, termo),
+                ).fetchall()
+            else:
+                registros = executar(
+                    conexao,
+                    """
+                    SELECT * FROM cadastros
+                    WHERE matricula LIKE ? OR endereco LIKE ? OR dica LIKE ? OR localizacao LIKE ?
+                    ORDER BY id DESC
+                    """,
+                    (termo, termo, termo, termo),
+                ).fetchall()
         else:
-            registros = conexao.execute("SELECT * FROM cadastros ORDER BY id DESC").fetchall()
+            registros = executar(conexao, "SELECT * FROM cadastros ORDER BY id DESC").fetchall()
 
     return render_template("cadastros.html", app_name=APP_NAME, registros=registros, busca=busca)
 
@@ -189,7 +279,8 @@ def adicionar():
     foto1, foto2, foto3 = salvar_fotos(fotos)
 
     with conectar_banco() as conexao:
-        conexao.execute(
+        executar(
+            conexao,
             """
             INSERT INTO cadastros (matricula, endereco, dica, localizacao, foto, foto2, foto3)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -218,7 +309,7 @@ def editar(cadastro_id):
         return redirect(url_for("cadastros"))
 
     with conectar_banco() as conexao:
-        cadastro = conexao.execute("SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
+        cadastro = executar(conexao, "SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
 
         if not cadastro:
             flash("Cadastro nao encontrado.")
@@ -232,7 +323,8 @@ def editar(cadastro_id):
             foto2 = cadastro["foto2"] or ""
             foto3 = cadastro["foto3"] or ""
 
-        conexao.execute(
+        executar(
+            conexao,
             """
             UPDATE cadastros
             SET matricula = ?, endereco = ?, dica = ?, localizacao = ?, foto = ?, foto2 = ?, foto3 = ?
@@ -257,8 +349,8 @@ def apagar(cadastro_id):
         return redirect(url_for("cadastros"))
 
     with conectar_banco() as conexao:
-        cadastro = conexao.execute("SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
-        conexao.execute("DELETE FROM cadastros WHERE id = ?", (cadastro_id,))
+        cadastro = executar(conexao, "SELECT * FROM cadastros WHERE id = ?", (cadastro_id,)).fetchone()
+        executar(conexao, "DELETE FROM cadastros WHERE id = ?", (cadastro_id,))
 
     if cadastro:
         apagar_fotos(cadastro)

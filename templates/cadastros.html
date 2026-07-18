@@ -94,8 +94,9 @@
                 <div class="record-photos">
                   {% set fotos = [registro["foto"], registro["foto2"], registro["foto3"]] %}
                   {% for foto in fotos if foto %}
-                    <button type="button" class="photo-button js-zoom-photo" data-src="{{ url_for('uploads', nome_arquivo=foto) }}">
-                      <img class="record-photo" src="{{ url_for('uploads', nome_arquivo=foto) }}" alt="Foto do cadastro {{ registro['matricula'] }}" />
+                    {% set foto_src = foto if foto.startswith("http") else url_for('uploads', nome_arquivo=foto) %}
+                    <button type="button" class="photo-button js-zoom-photo" data-src="{{ foto_src }}">
+                      <img class="record-photo" src="{{ foto_src }}" alt="Foto do cadastro {{ registro['matricula'] }}" />
                     </button>
                   {% else %}
                     <div class="record-photo placeholder">ROTA</div>
