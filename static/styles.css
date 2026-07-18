@@ -59,6 +59,13 @@ p {
   padding: 24px;
 }
 
+.creator-credit {
+  margin: -8px 0 2px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
 .app-shell {
   width: min(1180px, calc(100% - 32px));
   margin: 0 auto;
