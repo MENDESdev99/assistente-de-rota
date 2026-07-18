@@ -62,7 +62,7 @@ p {
 .login-card {
   display: grid;
   gap: 18px;
-  width: min(440px, 100%);
+  width: min(560px, 100%);
   padding: 30px 0;
   border: 0;
   border-radius: 0;
@@ -98,9 +98,15 @@ p {
 
 .login-card h1 {
   color: #092445;
-  font-size: clamp(2.1rem, 8vw, 3.3rem);
+  font-size: clamp(2.1rem, 7vw, 3rem);
   font-weight: 400;
   text-align: center;
+}
+
+@media (min-width: 640px) {
+  .login-card h1 {
+    white-space: nowrap;
+  }
 }
 
 .login-card label {
