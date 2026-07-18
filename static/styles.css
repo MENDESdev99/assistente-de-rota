@@ -230,7 +230,7 @@ h2 {
 }
 
 .summary small::before {
-  content: "Matr\00edculas cadastradas";
+  content: "Matriculas cadastradas";
   font-size: 0.72rem;
 }
 
