@@ -231,9 +231,10 @@ def cadastros():
         return redirect(url_for("login"))
 
     busca = request.args.get("busca", "").strip()
+    registros = []
 
-    with conectar_banco() as conexao:
-        if busca:
+    if busca:
+        with conectar_banco() as conexao:
             termo = f"%{busca}%"
             if USANDO_POSTGRES:
                 registros = executar(
@@ -255,8 +256,6 @@ def cadastros():
                     """,
                     (termo, termo, termo, termo),
                 ).fetchall()
-        else:
-            registros = executar(conexao, "SELECT * FROM cadastros ORDER BY id DESC").fetchall()
 
     return render_template("cadastros.html", app_name=APP_NAME, registros=registros, busca=busca)
 
