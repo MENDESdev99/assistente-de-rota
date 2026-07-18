@@ -170,7 +170,11 @@
                 </div>
               </article>
             {% else %}
-              <p class="empty-state is-visible">Nenhum cadastro encontrado.</p>
+              {% if busca %}
+                <p class="empty-state is-visible">Nenhum cadastro encontrado para essa busca.</p>
+              {% else %}
+                <p class="empty-state is-visible">Pesquise por matricula, rua, numero, dica ou GPS para ver os cadastros.</p>
+              {% endif %}
             {% endfor %}
           </div>
         </section>
