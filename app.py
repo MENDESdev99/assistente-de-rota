@@ -1,5 +1,7 @@
+import io
 import os
 import sqlite3
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,12 +21,25 @@ except ImportError:
     psycopg = None
     dict_row = None
 
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:
+    ConnectionPool = None
+
+try:
+    from PIL import Image, ImageOps
+except ImportError:
+    Image = None
+    ImageOps = None
+
 
 APP_NAME = "Assistente de Rota"
 ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "rota2026")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1234")
 SECRET_KEY = os.environ.get("SECRET_KEY", "troque-esta-chave-no-render")
 MAX_FOTOS = 3
+MAX_UPLOAD_DIMENSION = 1280
+SERVER_IMAGE_QUALITY = 78
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR / "data"))
@@ -52,6 +67,16 @@ if USANDO_CLOUDINARY and cloudinary is not None:
         secure=True,
     )
 
+POSTGRES_POOL = None
+
+if USANDO_POSTGRES and psycopg is not None and ConnectionPool is not None:
+    POSTGRES_POOL = ConnectionPool(
+        conninfo=DATABASE_URL,
+        min_size=1,
+        max_size=4,
+        kwargs={"row_factory": dict_row},
+    )
+
 
 def preparar_pastas():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -62,6 +87,9 @@ def conectar_banco():
     if USANDO_POSTGRES:
         if psycopg is None:
             raise RuntimeError("Instale psycopg para usar DATABASE_URL com Postgres.")
+
+        if POSTGRES_POOL is not None:
+            return POSTGRES_POOL.connection()
 
         return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
@@ -148,6 +176,60 @@ def extensao_permitida(nome_arquivo):
     return extensao in ALLOWED_EXTENSIONS
 
 
+def tamanho_arquivo(arquivo):
+    try:
+        arquivo.stream.seek(0, os.SEEK_END)
+        tamanho = arquivo.stream.tell()
+        arquivo.stream.seek(0)
+        return tamanho
+    except Exception:
+        return 0
+
+
+def comprimir_foto_para_upload(arquivo):
+    if Image is None:
+        arquivo.stream.seek(0)
+        return arquivo
+
+    inicio = time.perf_counter()
+    tamanho_original = tamanho_arquivo(arquivo)
+
+    try:
+        arquivo.stream.seek(0)
+        imagem = Image.open(arquivo.stream)
+        imagem = ImageOps.exif_transpose(imagem)
+        imagem.thumbnail((MAX_UPLOAD_DIMENSION, MAX_UPLOAD_DIMENSION))
+
+        if imagem.mode not in ("RGB", "L"):
+            fundo = Image.new("RGB", imagem.size, (255, 255, 255))
+            if imagem.mode == "RGBA":
+                fundo.paste(imagem, mask=imagem.getchannel("A"))
+            else:
+                fundo.paste(imagem)
+            imagem = fundo
+        elif imagem.mode == "L":
+            imagem = imagem.convert("RGB")
+
+        buffer = io.BytesIO()
+        imagem.save(buffer, format="JPEG", quality=SERVER_IMAGE_QUALITY, optimize=True)
+        buffer.seek(0)
+        buffer.name = secure_filename(arquivo.filename).rsplit(".", 1)[0] + ".jpg"
+
+        app.logger.info(
+            "[cadastro_tempo] compressao_foto=%.3fs original_kb=%.1f final_kb=%.1f dimensao=%sx%s",
+            time.perf_counter() - inicio,
+            tamanho_original / 1024 if tamanho_original else 0,
+            len(buffer.getbuffer()) / 1024,
+            imagem.width,
+            imagem.height,
+        )
+        return buffer
+    except Exception as erro:
+        app.logger.warning("[cadastro_tempo] compressao_foto_falhou=%s", erro)
+        arquivo.stream.seek(0)
+        return arquivo
+
+
 def salvar_foto(arquivo):
     if not arquivo or arquivo.filename == "":
         return ""
@@ -160,11 +242,14 @@ def salvar_foto(arquivo):
         if cloudinary is None:
             raise RuntimeError("Instale cloudinary para salvar fotos fora do Render.")
 
+        arquivo_upload = comprimir_foto_para_upload(arquivo)
+        inicio_upload = time.perf_counter()
         resultado = cloudinary.uploader.upload(
-            arquivo,
+            arquivo_upload,
             folder="assistente-de-rota",
             resource_type="image",
         )
+        app.logger.info("[cadastro_tempo] upload_cloudinary=%.3fs", time.perf_counter() - inicio_upload)
         return resultado.get("secure_url", "")
 
     nome_original = secure_filename(arquivo.filename)
@@ -178,8 +263,10 @@ def salvar_foto(arquivo):
 def salvar_fotos(arquivos):
     fotos_salvas = []
 
-    for arquivo in arquivos[:MAX_FOTOS]:
+    for indice, arquivo in enumerate(arquivos[:MAX_FOTOS], start=1):
+        inicio_foto = time.perf_counter()
         nome_foto = salvar_foto(arquivo)
+        app.logger.info("[cadastro_tempo] foto_%s_total=%.3fs", indice, time.perf_counter() - inicio_foto)
 
         if nome_foto:
             fotos_salvas.append(nome_foto)
@@ -225,6 +312,7 @@ def login():
 
 @app.route("/cadastros")
 def cadastros():
+    inicio = time.perf_counter()
     if not usuario_logado():
         return redirect(url_for("login"))
 
@@ -262,7 +350,7 @@ def cadastros():
                         (termo, termo, termo, termo),
                     ).fetchall()
 
-    return render_template(
+    resposta = render_template(
         "cadastros.html",
         app_name=APP_NAME,
         registros=registros,
@@ -270,10 +358,13 @@ def cadastros():
         mostrar_todos=mostrar_todos,
         total_cadastros=total_cadastros,
     )
+    app.logger.info("[cadastro_tempo] get_cadastros_total=%.3fs", time.perf_counter() - inicio)
+    return resposta
 
 
 @app.route("/adicionar", methods=["POST"])
 def adicionar():
+    inicio_total = time.perf_counter()
     if not usuario_logado():
         return redirect(url_for("login"))
 
@@ -287,8 +378,11 @@ def adicionar():
         flash("Preencha matricula, endereco e dica.")
         return redirect(url_for("cadastros"))
 
+    inicio_fotos = time.perf_counter()
     foto1, foto2, foto3 = salvar_fotos(fotos)
+    app.logger.info("[cadastro_tempo] etapa_upload_fotos=%.3fs", time.perf_counter() - inicio_fotos)
 
+    inicio_banco = time.perf_counter()
     with conectar_banco() as conexao:
         executar(
             conexao,
@@ -298,9 +392,14 @@ def adicionar():
             """,
             (matricula, endereco, dica, localizacao, foto1, foto2, foto3),
         )
+    app.logger.info("[cadastro_tempo] etapa_neon_insert=%.3fs", time.perf_counter() - inicio_banco)
 
     flash("Cadastro adicionado com sucesso.")
-    return redirect(url_for("cadastros"))
+    inicio_redirect = time.perf_counter()
+    resposta = redirect(url_for("cadastros"))
+    app.logger.info("[cadastro_tempo] etapa_redirect=%.3fs", time.perf_counter() - inicio_redirect)
+    app.logger.info("[cadastro_tempo] post_adicionar_total=%.3fs", time.perf_counter() - inicio_total)
+    return resposta
 
 
 @app.route("/editar/<int:cadastro_id>", methods=["POST"])
