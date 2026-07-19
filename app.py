@@ -22,11 +22,6 @@ except ImportError:
     dict_row = None
 
 try:
-    from psycopg_pool import ConnectionPool
-except ImportError:
-    ConnectionPool = None
-
-try:
     from PIL import Image, ImageOps
 except ImportError:
     Image = None
@@ -67,17 +62,6 @@ if USANDO_CLOUDINARY and cloudinary is not None:
         secure=True,
     )
 
-POSTGRES_POOL = None
-
-if USANDO_POSTGRES and psycopg is not None and ConnectionPool is not None:
-    POSTGRES_POOL = ConnectionPool(
-        conninfo=DATABASE_URL,
-        min_size=1,
-        max_size=4,
-        kwargs={"row_factory": dict_row},
-    )
-
-
 def preparar_pastas():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -87,9 +71,6 @@ def conectar_banco():
     if USANDO_POSTGRES:
         if psycopg is None:
             raise RuntimeError("Instale psycopg para usar DATABASE_URL com Postgres.")
-
-        if POSTGRES_POOL is not None:
-            return POSTGRES_POOL.connection()
 
         return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
